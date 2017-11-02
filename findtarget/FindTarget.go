@@ -1,4 +1,4 @@
-package FindTarget
+package findtarget
 
 import (
 	"os"
