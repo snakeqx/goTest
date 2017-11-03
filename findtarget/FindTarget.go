@@ -1,87 +1,98 @@
+// This package is to find the exact file name by
+// walking all given directory and its sub directories in parallel.
+// It uses a concurrency-limiting counting semaphore
+// to avoid opening too many files at once.
 package findtarget
 
+
+
 import (
-	"os"
+	"fmt"
 	"io/ioutil"
-	"errors"
-	"sync"
+	"os"
 	"path/filepath"
+	"sync"
 )
 
+// Target structure has 2 properties
+// prop1: Name string
+// prop2: Size int64
 type Target struct {
 	Name string
 	Size int64
 }
 
+// This is a exportable variable to store the list
 var TargetList []*Target
+// this is a channel to store the size, mainly use to sync
+var fileSizes = make(chan int64)
+var n sync.WaitGroup
 
-
-var wg = &sync.WaitGroup{}
-
-
-func FolderIteration(path string, target string) (bool, error){
-	pathInfo, err := os.Stat(path)
-	if err!=nil{
-		return false, err
+// Exportable function to find the target file name in given directory.
+// para 1: root []string: can pass a array of path
+// para 2: target2find string: the target filename
+// return 1: nfiles int64: quantity of files walked through. NOT the target quantity as
+//           it can be calculated simply by len(TargetList)
+// return 2: nbytes int64: total size sum of all walked through files.
+func FindTarget(roots []string, target2find string) (nfiles, nbytes int64) {
+	// Traverse each root of the file tree in parallel.
+	for _, root := range roots {
+		n.Add(1)
+		go walkDir(root, &n, target2find, fileSizes)
 	}
-	if !pathInfo.IsDir(){
-		err=errors.New("input is not a folder")
-		return false, err
-	}
+	go func() {
+		n.Wait()
+		close(fileSizes)
+	}()
 
-	files, err := ioutil.ReadDir(path)
-	if err!=nil {
-		return false, err
-	}
-
-	var fullName string
-	for _, file := range files {
-		fullName=filepath.Join(path, file.Name())
-		if file.IsDir() {
-			wg.Add(1)
-			go FolderIteration(fullName, target)
-		} else {
-			if target=="" {
-				TargetList = append(TargetList, &Target{fullName, file.Size()})
-			} else {
-				if file.Name() == target {
-					TargetList = append(TargetList, &Target{fullName, file.Size()})
-				}
+loop:
+	for {
+		select {
+		case size, ok := <-fileSizes:
+			if !ok {
+				break loop // fileSizes was closed
 			}
-
+			nfiles++
+			nbytes += size
 		}
 	}
-	wg.Done()
-	wg.Wait()
-	return true, nil
+
+	return nfiles, nbytes // final totals
 }
 
-func ListAllFiles(path string) error {
-	finish, err :=  FolderIteration(path, "")
-	if !finish || err !=nil {
-		return err
+
+// walkDir recursively walks the file tree rooted at dir
+// and sends the size of each found file on fileSizes.
+func walkDir(dir string, n *sync.WaitGroup, target2find string, fileSizes chan<- int64) {
+	defer n.Done()
+	for _, entry := range dirents(dir) {
+		if entry.IsDir() {
+			n.Add(1)
+			subdir := filepath.Join(dir, entry.Name())
+			go walkDir(subdir, n, target2find, fileSizes)
+		} else {
+			if target2find == entry.Name(){
+				_absName:=filepath.Join(dir, entry.Name())
+				TargetList = append(TargetList, &Target{_absName, entry.Size()})
+			}
+			fileSizes <- entry.Size()
+		}
 	}
-	return nil
 }
 
-func SearchFiles(path string, target string) error {
-	finish, err :=  FolderIteration(path, target)
-	if !finish || err !=nil {
-		return err
-	}
-	return nil
-}
 
-/*
-func main() {
+// sema is a counting semaphore for limiting concurrency in dirents.
+var sema = make(chan struct{}, 20)
 
-	//ListAllFiles(`D:\`)
-	err := SearchFiles(`D:\`, "IMG_0016.JPG")
-	if err!=nil{
-		fmt.Println(err)
+// dirents returns the entries of directory dir.
+func dirents(dir string) []os.FileInfo {
+	sema <- struct{}{}        // acquire token
+	defer func() { <-sema }() // release token
+
+	entries, err := ioutil.ReadDir(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "du: %v\n", err)
+		return nil
 	}
-	for _, files := range TargetList {
-		fmt.Printf("%v\n", files.Name)
-	}
+	return entries
 }
-*/
