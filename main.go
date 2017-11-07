@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	ft "./findtarget"
-	tb "./fileanalyze"
+	tb "./tubeanalyze"
 	"time"
 	"flag"
 )
