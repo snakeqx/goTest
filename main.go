@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
-	"./findtarget"
+	ft "./findtarget"
+	tb "./fileanalyze"
 	"time"
 	"flag"
 )
+
 
 func spinner(delay time.Duration) {
 	for {
@@ -17,8 +19,7 @@ func spinner(delay time.Duration) {
 	}
 }
 
-
-func main() {
+func runFindTarget(){
 	go spinner(100*time.Millisecond)
 	flag.Parse()
 	roots:=flag.Args()
@@ -26,11 +27,27 @@ func main() {
 		roots = []string{"."}
 	}
 
-	a, b:=findtarget.FindTarget(roots, "tube_history_current.tha2")
-	fmt.Println(a);
-	fmt.Println(b);
-	for _, s := range findtarget.TargetList {
+	a, b:=ft.FindTarget(roots, "tube_history_current.tha2")
+	fmt.Println(a)
+	fmt.Println(b)
+	for _, s := range ft.TargetList {
 		fmt.Println(s.Name)
 	}
+}
+
+func runFileAnalyze(){
+	a, err := tb.NewTubeHistory(`/Users/qianxin/Projects/Python/myEnv/projects/TubeHistoryAnalyzer/data/106054/tube_history_current.tha2`)
+	if err != nil {
+		fmt.Println("err begin:")
+		fmt.Println(err)
+		fmt.Println("err end.")
+	}
+	fmt.Printf("%q", a)
+}
+
+
+func main() {
+	//runFindTarget()
+	runFileAnalyze()
 }
 

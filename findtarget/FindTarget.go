@@ -72,8 +72,8 @@ func walkDir(dir string, n *sync.WaitGroup, target2find string, fileSizes chan<-
 			go walkDir(subdir, n, target2find, fileSizes)
 		} else {
 			if target2find == entry.Name(){
-				_absName:=filepath.Join(dir, entry.Name())
-				TargetList = append(TargetList, &Target{_absName, entry.Size()})
+				absName :=filepath.Join(dir, entry.Name())
+				TargetList = append(TargetList, &Target{absName, entry.Size()})
 			}
 			fileSizes <- entry.Size()
 		}
